@@ -135,7 +135,7 @@ Content-Length: 23
 
 `/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php`
 
-{% highlight PHP %}
+{ % highlight ruby lineos % }
 
     register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>[\d]+)', array(
             array(
@@ -165,7 +165,7 @@ Content-Length: 23
             'schema' => array( $this, 'get_public_item_schema' ),
         ) );
 
-{% endhighlight %}
+{ % endhighlight % }
 
 
 这段函数的功能是注册REST API的路由，使用正则
