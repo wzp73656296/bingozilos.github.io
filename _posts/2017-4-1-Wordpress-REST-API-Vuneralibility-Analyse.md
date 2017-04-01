@@ -335,7 +335,7 @@ public static function get_instance( $post_id ) {
 
 修复后：
 
-{% highlight bash lineno %}
+
 
     public static function get_instance( $post_id ) {
         global $wpdb;
@@ -344,7 +344,7 @@ public static function get_instance( $post_id ) {
             return false;
         }
         
-{% endhighlight %}
+
 
 改动很简单，修改了对<kbd>$post_id</kbd>判断逻辑，消除了以这种形式<kbd>id=1a</kbd>绕过的可能。
 
