@@ -82,7 +82,7 @@ REST API到底是个什么东西？有什么用呢？
 示例
 `$ curl http://demo.wp-api.org/wp-json/wp/v2/posts`
 
-在本环境中，访问以下链接可获取所有文章信息
+在本地环境中，访问以下链接可获取所有文章信息
 `http://127.0.0.1/wordpress/index.php/wp-json/wp/v2/posts`
 效果如下图：
 
