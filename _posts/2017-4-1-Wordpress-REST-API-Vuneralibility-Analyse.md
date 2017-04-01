@@ -135,7 +135,7 @@ Content-Length: 23
 
 `/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php`
 
-{% highlight php %}
+{% highlight PHP %}
 
     register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>[\d]+)', array(
             array(
