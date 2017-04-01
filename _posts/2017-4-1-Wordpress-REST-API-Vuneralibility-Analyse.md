@@ -322,5 +322,5 @@ content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[<
 
 ## 0x05  参考文章
 
-* https://blog.sucuri.net/2017/02/content-injection-vulnerability-wordpress-rest-api.html
-* https://www.seebug.org/vuldb/ssvid-92637
+* [https://blog.sucuri.net/2017/02/content-injection-vulnerability-wordpress-rest-api.html](https://blog.sucuri.net/2017/02/content-injection-vulnerability-wordpress-rest-api.html)
+* [https://www.seebug.org/vuldb/ssvid-92637](https://www.seebug.org/vuldb/ssvid-92637)
