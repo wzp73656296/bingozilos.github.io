@@ -68,7 +68,7 @@ comments: true
 ###  0x02x01  关于REST-API
 
 REST API到底是个什么东西？有什么用呢？
-我查看了REST API的<a href=https://developer.wordpress.org/rest-api/>官方文档</a>，REST API提供了下列几种基本功能（<kbd>C</kbd><kbd>R</kbd><kbd>U</kbd><kbd>D</kbd>大家都懂）
+我查看了REST API的[官方文档](https://developer.wordpress.org/rest-api/)，REST API提供了下列几种基本功能（<kbd>C</kbd><kbd>R</kbd><kbd>U</kbd><kbd>D</kbd>大家都懂）
 
 {% capture images %}
 	http://i4.buimg.com/589989/1a03bbdf062f236b.png
@@ -130,7 +130,7 @@ Content-Length: 23
 
 ### 0x03x01  漏洞成因
 
-我们参考漏洞披露者提供的<a href=https://blog.sucuri.net/2017/02/content-injection-vulnerability-wordpress-rest-api.html>技术细节</a>探究一下漏洞形成的原因。
+我们参考漏洞披露者提供的[技术细节](https://blog.sucuri.net/2017/02/content-injection-vulnerability-wordpress-rest-api.html)探究一下漏洞形成的原因。
 
 先来看一下控制器文件
 
