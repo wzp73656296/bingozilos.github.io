@@ -135,7 +135,7 @@ Content-Length: 23
 
 `/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php`
 
-{% highlight php linenos %}
+{% highlight html %}
 	public function register_routes() {
 		register_rest_route( $this->namespace, '/' . $this->rest_base, array(
 			array(
@@ -181,7 +181,7 @@ Content-Length: 23
 <kbd>update_item_permissions_check</kbd>
 
 
-
+{% highlight html %}
     public function update_item_permissions_check( $request ) {
         $post = get_post( $request['id'] );
         $post_type = get_post_type_object( $this->post_type );
@@ -204,13 +204,13 @@ Content-Length: 23
 
         return true;
     }
-    
+{% endhighlight  %}
 
 
 不难发现唯一一处限制参数<kbd>id</kbd>的就是第一条<kbd>if</kbd>语句,只要将<kbd>$post</kbd>置为空，函数就会<kbd>return true</kbd>,成功绕过权限检查。跟进<kbd>get_post</kbd>方法。
 
 
-
+{% highlight html %}
     function get_post( $post = null, $output = OBJECT, $filter = 'raw' ) {  
         if ( empty( $post ) && isset( $GLOBALS['post'] ) )
             $post = $GLOBALS['post'];
@@ -232,13 +232,14 @@ Content-Length: 23
 
         if ( ! $_post )
             return null;
-        
+      
+{% endhighlight %}
 
 
 调用了wp-post中的<kbd>get_instance</kbd>方法，再次跟进
 
 
-
+{% highlight html %}
     public static function get_instance( $post_id ) {
         global $wpdb;
 
@@ -265,6 +266,7 @@ Content-Length: 23
         return new WP_Post( $_post );
     }
     
+{% endhighlight %}    
 
 
 分析第一条<kbd>if</kbd>语句可以得知，当<kbd>$post_id</kbd>不是纯数字时，该方法返回<kbd>false</kbd>导致<kbd>get_post</kbd>方法返回<kbd>null</kbd>，这样一来<kbd>update_item_permissions_check</kbd>方法中的$post为空，至此，成功绕过权限检查。
@@ -272,13 +274,13 @@ Content-Length: 23
 再来看<kbd>update_item</kbd>方法
 
 
-
+{% highlight html %}
     public function update_item( $request ) {
         $id = (int) $request['id'];
 
         $comment = get_comment( $id );
         ......
-        
+{% endhighlight %}        
 
 
 在这里参数<kbd>id</kbd>被直接转为了<kbd>int</kbd>型,这里演示一下这样会造成什么结果。
@@ -309,7 +311,7 @@ content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[<
 
 修复前：
 
-
+{% highlight html %}
 
     public static function get_instance( $post_id ) {
         global $wpdb;
@@ -317,19 +319,19 @@ content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[<
         if ( ! is_numeric( $post_id ) || $post_id != floor( $post_id ) || ! $post_id ) {
             return false;
         }
-        
+{% endhighlight %}        
 
 
 修复后： 
 
-
+{% highlight html %}
     public static function get_instance( $post_id ) {
         global $wpdb;
 
         if ( !$post_id ) {
             return false;
         }
-        
+{% endhighlight %}        
 
 
 改动很简单，修改了对<kbd>$post_id</kbd>判断逻辑，消除了以这种形式<kbd>id=1a</kbd>绕过的可能。
