@@ -322,7 +322,7 @@ content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[<
 
 修复前：
 
-{% highlight php %}
+{% highlight bash lineno %}
 
 public static function get_instance( $post_id ) {
         global $wpdb;
@@ -335,7 +335,7 @@ public static function get_instance( $post_id ) {
 
 修复后：
 
-{% highlight php %}
+{% highlight bash lineno %}
 
     public static function get_instance( $post_id ) {
         global $wpdb;
