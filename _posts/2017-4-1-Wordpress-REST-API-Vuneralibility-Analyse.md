@@ -5,7 +5,6 @@ date:   2017-4-1
 excerpt: "就从这里开始我的代码审计之路吧。"
 feature: http://i1.piimg.com/589989/00d5439f21be297b.jpg
 tags: [vulnerability analysis]
-comments: true
 ---
 
 # WordPress REST API漏洞复现及分析
