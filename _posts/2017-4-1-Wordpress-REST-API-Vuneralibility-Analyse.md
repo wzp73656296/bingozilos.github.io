@@ -137,7 +137,7 @@ Content-Length: 23
 
 
 
-register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>[\d]+)', array(
+    register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>[\d]+)', array(
             array(
                 'methods'             => WP_REST_Server::READABLE,
                 'callback'            => array( $this, 'get_item' ),
@@ -194,15 +194,15 @@ register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>[\d]+)'
 
 
 
-public function update_item_permissions_check( $request ) {
+    public function update_item_permissions_check( $request ) {
         $post = get_post( $request['id'] );
         $post_type = get_post_type_object( $this->post_type );
 
         if ( $post && ! $this->check_update_permission( $post ) ) {
-            return new WP_Error( 'rest_cannot_edit', __( 'Sorry, you are not allowed to edit this post.' ), array( 'status' => rest_authorization_required_code() ) );
+            return new WP_Error( 'rest_cannot_edit', __( 'Sorry, you are not allowed to edit this post.' ), array( 'status' =>                rest_authorization_required_code() ) ); 
         }
 
-        if ( ! empty( $request['author'] ) && get_current_user_id() !== $request['author'] && ! current_user_can( $post_type->cap->edit_others_posts ) ) {
+        if ( ! empty( $request['author'] ) && get_current_user_id() !== $request['author'] && ! current_user_can(      $post_type->cap->edit_others_posts ) ) {
             return new WP_Error( 'rest_cannot_edit_others', __( 'Sorry, you are not allowed to update posts as this user.' ), array( 'status' => rest_authorization_required_code() ) );
         }
 
@@ -223,27 +223,27 @@ public function update_item_permissions_check( $request ) {
 
 
 
-function get_post( $post = null, $output = OBJECT, $filter = 'raw' ) {  
-    if ( empty( $post ) && isset( $GLOBALS['post'] ) )
-        $post = $GLOBALS['post'];
+    function get_post( $post = null, $output = OBJECT, $filter = 'raw' ) {  
+        if ( empty( $post ) && isset( $GLOBALS['post'] ) )
+            $post = $GLOBALS['post'];
 
-    if ( $post instanceof WP_Post ) {
-        $_post = $post;
-    } elseif ( is_object( $post ) ) {
-        if ( empty( $post->filter ) ) {
-            $_post = sanitize_post( $post, 'raw' );
-            $_post = new WP_Post( $_post );
-        } elseif ( 'raw' == $post->filter ) {
-            $_post = new WP_Post( $post );
+        if ( $post instanceof WP_Post ) {
+            $_post = $post;
+        } elseif ( is_object( $post ) ) {
+            if ( empty( $post->filter ) ) {
+                $_post = sanitize_post( $post, 'raw' );
+                $_post = new WP_Post( $_post );
+            } elseif ( 'raw' == $post->filter ) {
+                $_post = new WP_Post( $post );
+            } else {
+                $_post = WP_Post::get_instance( $post->ID );
+            }
         } else {
-            $_post = WP_Post::get_instance( $post->ID );
+            $_post = WP_Post::get_instance( $post );
         }
-    } else {
-        $_post = WP_Post::get_instance( $post );
-    }
 
-    if ( ! $_post )
-        return null;
+        if ( ! $_post )
+            return null;
         
 
 
@@ -251,7 +251,7 @@ function get_post( $post = null, $output = OBJECT, $filter = 'raw' ) {
 
 
 
-public static function get_instance( $post_id ) {
+    public static function get_instance( $post_id ) {
         global $wpdb;
 
         if ( ! is_numeric( $post_id ) || $post_id != floor( $post_id ) || ! $post_id ) {
@@ -323,7 +323,7 @@ content<spanclass="token punctuation">:</span>"<span class="tokenpunctuation">[<
 
 
 
-public static function get_instance( $post_id ) {
+    public static function get_instance( $post_id ) {
         global $wpdb;
 
         if ( ! is_numeric( $post_id ) || $post_id != floor( $post_id ) || ! $post_id ) {
@@ -335,7 +335,7 @@ public static function get_instance( $post_id ) {
 修复后：
 
 
-public static function get_instance( $post_id ) {
+    public static function get_instance( $post_id ) {
         global $wpdb;
 
         if ( !$post_id ) {
